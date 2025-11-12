@@ -1,19 +1,19 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react'
+import { Product } from '../types/products'
 
 interface CartItem {
-  id: string
-  name: string
-  price: number
+  product: Product
   quantity: number
 }
 
 interface CartContextType {
-  items: CartItem[]
-  addItem: (item: Omit<CartItem, 'quantity'>) => void
-  removeItem: (id: string) => void
-  updateQuantity: (id: string, quantity: number) => void
+  cart: CartItem[]
+  addToCart: (product: Product) => void
+  removeFromCart: (productId: string) => void
+  updateQuantity: (productId: string, quantity: number) => void
   clearCart: () => void
-  total: number
+  getTotal: () => number
+  getItemCount: (productId: string) => number
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined)
@@ -31,51 +31,59 @@ interface CartProviderProps {
 }
 
 export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
-  const [items, setItems] = useState<CartItem[]>([])
+  const [cart, setCart] = useState<CartItem[]>([])
 
-  const addItem = (newItem: Omit<CartItem, 'quantity'>) => {
-    setItems(prev => {
-      const existing = prev.find(item => item.id === newItem.id)
+  const addToCart = (product: Product) => {
+    setCart(prev => {
+      const existing = prev.find(item => item.product.id === product.id)
       if (existing) {
         return prev.map(item => 
-          item.id === newItem.id 
+          item.product.id === product.id 
             ? { ...item, quantity: item.quantity + 1 }
             : item
         )
       }
-      return [...prev, { ...newItem, quantity: 1 }]
+      return [...prev, { product, quantity: 1 }]
     })
   }
 
-  const removeItem = (id: string) => {
-    setItems(prev => prev.filter(item => item.id !== id))
+  const removeFromCart = (productId: string) => {
+    setCart(prev => prev.filter(item => item.product.id !== productId))
   }
 
-  const updateQuantity = (id: string, quantity: number) => {
+  const updateQuantity = (productId: string, quantity: number) => {
     if (quantity <= 0) {
-      removeItem(id)
+      removeFromCart(productId)
       return
     }
-    setItems(prev => 
+    setCart(prev => 
       prev.map(item => 
-        item.id === id ? { ...item, quantity } : item
+        item.product.id === productId ? { ...item, quantity } : item
       )
     )
   }
 
   const clearCart = () => {
-    setItems([])
+    setCart([])
   }
 
-  const total = items.reduce((sum, item) => sum + (item.price * item.quantity), 0)
+  const getTotal = () => {
+    return cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0)
+  }
+
+  const getItemCount = (productId: string) => {
+    const item = cart.find(item => item.product.id === productId)
+    return item?.quantity || 0
+  }
 
   const value: CartContextType = {
-    items,
-    addItem,
-    removeItem,
+    cart,
+    addToCart,
+    removeFromCart,
     updateQuantity,
     clearCart,
-    total
+    getTotal,
+    getItemCount
   }
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>
