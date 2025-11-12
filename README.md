@@ -1,6 +1,6 @@
 # 🍵 Cream & Roast - Sistema POS
 
-> **Versión 0.01** | Sistema Point of Sale completo para cafeterías  
+> **Versión 0.1** | Sistema Point of Sale completo para cafeterías  
 > **Stack**: React + TypeScript + Node.js + PostgreSQL (Supabase)
 
 ![GitHub repo size](https://img.shields.io/github/repo-size/luisdev-dark/CreamyRoast)
@@ -16,6 +16,7 @@ Sistema POS (Point of Sale) completo para la cafetería **Cream & Roast**. Manej
 
 ### ✨ Características Principales
 
+- 🔐 **Sistema de Login Completo**: Autenticación segura con JWT y localStorage
 - 🛒 **Punto de Venta**: Interface rápida para cajeros con grid de productos
 - 📊 **Dashboard Administrativo**: Gestión completa de productos, ventas e inventario
 - 🖨️ **Comprobantes**: Generación e impresión en formato térmico 80mm
@@ -23,6 +24,7 @@ Sistema POS (Point of Sale) completo para la cafetería **Cream & Roast**. Manej
 - 💰 **Múltiples Pagos**: Efectivo, tarjeta, Yape
 - 📱 **Responsive**: Interface adaptable a tablets y móviles
 - 🔒 **Autenticación JWT**: Seguridad con tokens y RLS de Supabase
+- 💾 **Sesión Persistente**: Recordar credenciales y mantener sesión activa
 
 ---
 
@@ -143,7 +145,10 @@ npm run dev
 ## 📋 API Endpoints
 
 ### Autenticación
-- `POST /api/auth/login` - Iniciar sesión
+- `POST /api/auth/login` - Iniciar sesión con JWT
+- `POST /api/auth/register` - Registrar nuevo usuario
+- `GET /api/auth/me` - Obtener usuario actual
+- `POST /api/auth/refresh` - Refrescar token JWT
 - `POST /api/auth/logout` - Cerrar sesión
 
 ### Productos
@@ -200,7 +205,7 @@ npm run dev
 - [x] Autenticación mock
 - [x] Schema de BD
 
-### v0.1 🎯 Fase 1
+### v0.1 ✅ Sistema de Login Completo
 - [ ] Autenticación real con Supabase
 - [ ] CRUD productos
 - [ ] Registro de ventas funcional

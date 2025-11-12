@@ -18,14 +18,32 @@ export const login = async (req: Request<{}, {}, LoginRequest>, res: Response) =
     // });
 
     // Mock de autenticación por ahora
+    let mockUser = null;
+    
     if (email === 'admin@creamroast.com' && password === 'admin123') {
-      const mockUser = {
+      mockUser = {
         id: '123e4567-e89b-12d3-a456-426614174000',
         email: email,
         role: 'administrador',
         name: 'Administrador',
       };
+    } else if (email === 'cashier' && password === 'cashier123') {
+      mockUser = {
+        id: '456e7890-e89b-12d3-a456-426614174001',
+        email: 'cashier@creamroast.com',
+        role: 'cajero',
+        name: 'Cajero',
+      };
+    } else if (email === 'waiter' && password === 'waiter123') {
+      mockUser = {
+        id: '789e0123-e89b-12d3-a456-426614174002',
+        email: 'waiter@creamroast.com',
+        role: 'empleado',
+        name: 'Empleado',
+      };
+    }
 
+    if (mockUser) {
       const token = jwt.sign(
         {
           sub: mockUser.id,

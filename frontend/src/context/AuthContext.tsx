@@ -1,4 +1,4 @@
-import React, { createContext, useContext, ReactNode } from 'react';
+import React, { createContext, useContext, ReactNode, useEffect } from 'react';
 import { useAuth as useAuthHook } from '../hooks/useAuth';
 import { User } from '../types/users';
 
@@ -61,6 +61,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     hasAnyRole: auth.hasAnyRole,
     isAuthenticated: auth.isAuthenticated,
   };
+
+  // Bloquear la navegación hacia atrás después de autenticarse
+  useEffect(() => {
+    if (auth.isAuthenticated) {
+      // Importar y usar la utilidad para prevenir navegación hacia atrás
+      import('../utils/navigationUtils').then(({ preventBackNavigation }) => {
+        preventBackNavigation();
+      });
+    }
+  }, [auth.isAuthenticated]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

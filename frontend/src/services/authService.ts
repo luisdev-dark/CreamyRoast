@@ -1,266 +1,198 @@
-import { api, setAuthToken, clearAuth } from './api';
-import {
-  User,
-  LoginCredentials,
-  RegisterData,
-  UpdateUserData,
-  ChangePasswordData,
-  UserFilters,
-  LoginResponse,
-  RegisterResponse,
-  UserListResponse,
-  UserResponse,
-  PasswordChangeResponse,
-} from '../types/users';
+import { LoginCredentials, RegisterData, AuthResponse, UpdateUserData, ChangePasswordData } from '../types/users';
+import api from './api';
 
-export const authService = {
-  // Login de usuario
-  login: async (credentials: LoginCredentials): Promise<{ user: User; token: string }> => {
-    try {
-      const response = await api.post<LoginResponse>('/auth/login', credentials);
-      
-      if (response.success && response.data) {
-        // Guardar token en localStorage
-        setAuthToken(response.data.token);
-        
-        // Guardar usuario en localStorage
-        localStorage.setItem('user', JSON.stringify(response.data.user));
-        
-        return {
-          user: response.data.user,
-          token: response.data.token,
-        };
-      } else {
-        throw new Error(response.message || 'Error al iniciar sesión');
-      }
-    } catch (error) {
-      console.error('Error en login:', error);
-      throw error;
-    }
-  },
+class AuthService {
+  private tokenKey = 'auth_token';
+  private userKey = 'auth_user';
 
-  // Registro de nuevo usuario
-  register: async (userData: RegisterData): Promise<{ user: User; token: string }> => {
+  // Login
+  async login(credentials: LoginCredentials): Promise<AuthResponse> {
     try {
-      const response = await api.post<RegisterResponse>('/auth/register', userData);
+      const response = await api.post('/api/auth/login', credentials);
       
-      if (response.success && response.data) {
-        // Guardar token en localStorage
-        setAuthToken(response.data.token);
-        
-        // Guardar usuario en localStorage
-        localStorage.setItem('user', JSON.stringify(response.data.user));
-        
-        return {
-          user: response.data.user,
-          token: response.data.token,
-        };
+      // Guardar token y usuario en localStorage
+      const { token, user } = response.data;
+      this.setToken(token);
+      this.setUser(user);
+      
+      return { user, token, expiresIn: 8 * 60 * 60 }; // 8 horas en segundos
+    } catch (error: any) {
+      console.log('Error completo en authService:', error);
+      if (error.response) {
+        console.log('Error response:', error.response.data);
+        throw new Error(error.response.data.error || 'Error de autenticación');
+      } else if (error.request) {
+        throw new Error('Error de red: No se pudo conectar al servidor');
       } else {
-        throw new Error(response.message || 'Error al registrar usuario');
+        throw new Error('Error desconocido al iniciar sesión');
       }
-    } catch (error) {
-      console.error('Error en registro:', error);
-      throw error;
     }
-  },
+  }
 
-  // Obtener perfil del usuario actual
-  getProfile: async (): Promise<User> => {
-    try {
-      const response = await api.get<UserResponse>('/auth/profile');
-      
-      if (response.success && response.data) {
-        // Actualizar usuario en localStorage
-        localStorage.setItem('user', JSON.stringify(response.data.user));
-        return response.data.user;
-      } else {
-        throw new Error(response.message || 'Error al obtener perfil');
-      }
-    } catch (error) {
-      console.error('Error al obtener perfil:', error);
-      throw error;
-    }
-  },
+  // Logout
+  logout(): void {
+    localStorage.removeItem(this.tokenKey);
+    localStorage.removeItem(this.userKey);
+    // Eliminar token de la instancia de API
+    delete api.defaults.headers.common['Authorization'];
+  }
 
-  // Actualizar perfil del usuario
-  updateProfile: async (userData: UpdateUserData): Promise<User> => {
+  // Registro
+  async register(userData: RegisterData): Promise<AuthResponse> {
     try {
-      const response = await api.put<UserResponse>('/auth/profile', userData);
+      const response = await api.post('/api/auth/register', userData);
       
-      if (response.success && response.data) {
-        // Actualizar usuario en localStorage
-        localStorage.setItem('user', JSON.stringify(response.data.user));
-        return response.data.user;
+      const { token, user } = response.data;
+      this.setToken(token);
+      this.setUser(user);
+      
+      return { user, token, expiresIn: 8 * 60 };
+    } catch (error: any) {
+      if (error.response) {
+        throw new Error(error.response.data.error || 'Error al registrar usuario');
+      } else if (error.request) {
+        throw new Error('Error de red: No se pudo conectar al servidor');
       } else {
-        throw new Error(response.message || 'Error al actualizar perfil');
+        throw new Error('Error desconocido al registrar usuario');
       }
-    } catch (error) {
-      console.error('Error al actualizar perfil:', error);
-      throw error;
     }
-  },
+  }
+
+  // Actualizar perfil
+  async updateProfile(userData: UpdateUserData) {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        throw new Error('No hay token de autenticación');
+      }
+
+      const response = await api.put('/api/auth/profile', userData, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      // Actualizar datos locales
+      const updatedUser = response.data.user;
+      this.setUser(updatedUser);
+
+      return updatedUser;
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        this.logout();
+        throw new Error('Sesión expirada. Por favor, inicie sesión nuevamente.');
+      }
+      throw new Error(error.response?.data?.error || 'Error al actualizar perfil');
+    }
+  }
 
   // Cambiar contraseña
-  changePassword: async (passwordData: ChangePasswordData): Promise<void> => {
+  async changePassword(passwordData: ChangePasswordData): Promise<void> {
     try {
-      const response = await api.post<PasswordChangeResponse>('/auth/change-password', passwordData);
-      
-      if (!response.success) {
-        throw new Error(response.message || 'Error al cambiar contraseña');
+      const token = this.getToken();
+      if (!token) {
+        throw new Error('No hay token de autenticación');
       }
-    } catch (error) {
-      console.error('Error al cambiar contraseña:', error);
-      throw error;
+
+      await api.post('/api/auth/change-password', passwordData, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        this.logout();
+        throw new Error('Sesión expirada. Por favor, inicie sesión nuevamente.');
+      }
+      throw new Error(error.response?.data?.error || 'Error al cambiar contraseña');
     }
-  },
+  }
 
-  // Cerrar sesión
-  logout: (): void => {
-    clearAuth();
-  },
-
-  // Verificar si el usuario está autenticado
-  isAuthenticated: (): boolean => {
-    const token = localStorage.getItem('token');
-    const user = localStorage.getItem('user');
-    return !!(token && user);
-  },
-
-  // Obtener usuario actual desde localStorage
-  getCurrentUser: (): User | null => {
+  // Obtener perfil
+  async getProfile() {
     try {
-      const userStr = localStorage.getItem('user');
-      if (userStr) {
-        return JSON.parse(userStr) as User;
+      const token = this.getToken();
+      if (!token) {
+        throw new Error('No hay token de autenticación');
       }
+
+      const response = await api.get('/api/auth/profile', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      // Actualizar datos locales
+      const user = response.data.user;
+      this.setUser(user);
+
+      return user;
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        this.logout();
+        throw new Error('Sesión expirada. Por favor, inicie sesión nuevamente.');
+      }
+      throw new Error(error.response?.data?.error || 'Error al obtener perfil');
+    }
+  }
+
+  // Verificar si hay token válido
+  isAuthenticated(): boolean {
+    const token = this.getToken();
+    if (!token) return false;
+
+    // Verificar si el token ha expirado
+    try {
+      // En una implementación real, podrías decodificar el JWT para verificar la expiración
+      // Por ahora, simplemente verificamos si existe
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  // Obtener token
+  getToken(): string | null {
+    return localStorage.getItem(this.tokenKey);
+  }
+
+  // Establecer token
+  private setToken(token: string): void {
+    localStorage.setItem(this.tokenKey, token);
+    // Configurar token en la instancia de API
+    api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+  }
+
+  // Obtener usuario actual
+  getCurrentUser(): any {
+    const userStr = localStorage.getItem(this.userKey);
+    if (!userStr) return null;
+
+    try {
+      return JSON.parse(userStr);
+    } catch (error) {
+      console.error('Error al parsear el usuario almacenado:', error);
       return null;
-    } catch (error) {
-      console.error('Error al obtener usuario actual:', error);
-      return null;
     }
-  },
+  }
 
-  // Obtener token actual
-  getToken: (): string | null => {
-    return localStorage.getItem('token');
-  },
+  // Establecer usuario
+  private setUser(user: any): void {
+    localStorage.setItem(this.userKey, JSON.stringify(user));
+  }
 
-  // Refrescar token (si el backend lo soporta)
-  refreshToken: async (): Promise<string> => {
-    try {
-      const response = await api.post<{ success: boolean; data: { token: string }; message: string }>('/auth/refresh');
-      
-      if (response.success && response.data) {
-        setAuthToken(response.data.token);
-        return response.data.token;
-      } else {
-        throw new Error(response.message || 'Error al refrescar token');
-      }
-    } catch (error) {
-      console.error('Error al refrescar token:', error);
-      throw error;
+  // Bloquear navegación hacia atrás después de autenticarse
+  setupBackNavigationProtection(): void {
+    // Esta función puede ser llamada después de la autenticación exitosa
+    // para prevenir que el usuario regrese a la página de login con el botón de atrás
+    if (this.isAuthenticated()) {
+      // Importar la utilidad para prevenir navegación hacia atrás
+      import('../utils/navigationUtils').then(({ preventBackNavigation }) => {
+        preventBackNavigation();
+      });
     }
-  },
-};
+  }
+}
 
-// Servicio de administración de usuarios (solo para admins)
-export const userService = {
-  // Listar todos los usuarios
-  getUsers: async (filters?: UserFilters): Promise<{ users: User[]; total: number }> => {
-    try {
-      const response = await api.get<UserListResponse>('/users', filters);
-      
-      if (response.success && response.data) {
-        return {
-          users: response.data.users,
-          total: response.data.total,
-        };
-      } else {
-        throw new Error(response.message || 'Error al obtener usuarios');
-      }
-    } catch (error) {
-      console.error('Error al obtener usuarios:', error);
-      throw error;
-    }
-  },
-
-  // Obtener un usuario específico
-  getUser: async (userId: number): Promise<User> => {
-    try {
-      const response = await api.get<UserResponse>(`/users/${userId}`);
-      
-      if (response.success && response.data) {
-        return response.data.user;
-      } else {
-        throw new Error(response.message || 'Error al obtener usuario');
-      }
-    } catch (error) {
-      console.error('Error al obtener usuario:', error);
-      throw error;
-    }
-  },
-
-  // Crear nuevo usuario (admin)
-  createUser: async (userData: RegisterData): Promise<User> => {
-    try {
-      const response = await api.post<UserResponse>('/users', userData);
-      
-      if (response.success && response.data) {
-        return response.data.user;
-      } else {
-        throw new Error(response.message || 'Error al crear usuario');
-      }
-    } catch (error) {
-      console.error('Error al crear usuario:', error);
-      throw error;
-    }
-  },
-
-  // Actualizar usuario (admin)
-  updateUser: async (userId: number, userData: UpdateUserData): Promise<User> => {
-    try {
-      const response = await api.put<UserResponse>(`/users/${userId}`, userData);
-      
-      if (response.success && response.data) {
-        return response.data.user;
-      } else {
-        throw new Error(response.message || 'Error al actualizar usuario');
-      }
-    } catch (error) {
-      console.error('Error al actualizar usuario:', error);
-      throw error;
-    }
-  },
-
-  // Eliminar usuario (admin)
-  deleteUser: async (userId: number): Promise<void> => {
-    try {
-      const response = await api.delete<{ success: boolean; message: string }>(`/users/${userId}`);
-      
-      if (!response.success) {
-        throw new Error(response.message || 'Error al eliminar usuario');
-      }
-    } catch (error) {
-      console.error('Error al eliminar usuario:', error);
-      throw error;
-    }
-  },
-
-  // Activar/desactivar usuario
-  toggleUserStatus: async (userId: number, isActive: boolean): Promise<User> => {
-    try {
-      const response = await api.patch<UserResponse>(`/users/${userId}/status`, { isActive });
-      
-      if (response.success && response.data) {
-        return response.data.user;
-      } else {
-        throw new Error(response.message || 'Error al cambiar estado del usuario');
-      }
-    } catch (error) {
-      console.error('Error al cambiar estado del usuario:', error);
-      throw error;
-    }
-  },
-};
-
+export const authService = new AuthService();
 export default authService;
