@@ -1,5 +1,5 @@
-// src/controllers/salesController.ts
 import { Request, Response } from 'express';
+import { createSale as createSaleInDb, getSales as getSalesFromDb, cancelSale as cancelSaleInDb } from '../services/sqliteService';
 
 interface CreateSaleRequest {
   items: Array<{ productId: string; quantity: number }>;
@@ -11,46 +11,63 @@ interface CreateSaleRequest {
 export const createSale = async (
   req: Request<{}, {}, CreateSaleRequest>,
   res: Response
-) => {
+): Promise<void> => {
   try {
-    // TODO: Implementar lógica de ventas con Supabase
     const { items, paymentMethod, discount } = req.body;
 
-    // Mock de respuesta
-    const saleNumber = `BOL-${new Date().toISOString().split('T')[0].replace(/-/g, '')}-${String(Date.now()).slice(-4)}`;
-    const total = 45.00; // Mock total
+    // Calcular total (por ahora mock, luego se calculará basado en productos)
+    const total = 45.00;
+    
+    const newSale = {
+      id: `sale-${Date.now()}`,
+      total,
+      user_id: null, // Se puede obtener del token después
+      items,
+      paymentMethod,
+      discount
+    };
+
+    createSaleInDb(newSale);
+
+    // Generar número de venta simple
+    const saleNumber = `BOL-${Date.now()}`;
 
     res.json({
-      saleId: `sale-${Date.now()}`,
+      saleId: newSale.id,
       saleNumber,
       total,
-      message: 'Venta registrada exitosamente (mock)',
+      message: 'Venta registrada exitosamente',
     });
   } catch (error) {
+    console.error('Error registrando venta:', error);
     res.status(500).json({ error: 'Error registrando venta' });
   }
 };
 
-export const getSales = async (req: Request, res: Response) => {
+export const getSales = async (req: Request, res: Response): Promise<void> => {
   try {
-    // TODO: Implementar consulta de ventas
-    res.json({
-      sales: [],
-      message: 'Lista de ventas (mock)',
-    });
+    const sales = getSalesFromDb();
+    res.json({ sales });
   } catch (error) {
+    console.error('Error obteniendo ventas:', error);
     res.status(500).json({ error: 'Error obteniendo ventas' });
   }
 };
 
-export const cancelSale = async (req: Request, res: Response) => {
+export const cancelSale = async (req: Request, res: Response): Promise<void> => {
   try {
     const { saleId } = req.params;
     const { razon } = req.body;
 
-    // TODO: Implementar cancelación de venta
-    res.json({ message: 'Venta cancelada correctamente (mock)' });
+    if (!saleId) {
+      res.status(400).json({ error: 'ID de venta requerido' });
+      return;
+    }
+
+    const result = cancelSaleInDb(saleId);
+    res.json(result);
   } catch (error) {
+    console.error('Error cancelando venta:', error);
     res.status(500).json({ error: 'Error cancelando venta' });
   }
 };

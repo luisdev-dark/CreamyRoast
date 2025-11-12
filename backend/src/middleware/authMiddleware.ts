@@ -1,6 +1,13 @@
-// src/middleware/authMiddleware.ts
 import { Request, Response, NextFunction } from 'express';
-import * as jwt from 'jsonwebtoken';
+import jwt from 'jsonwebtoken';
+
+declare global {
+  namespace NodeJS {
+    interface ProcessEnv {
+      JWT_SECRET?: string;
+    }
+  }
+}
 
 export interface AuthRequest extends Request {
   user?: {
@@ -11,17 +18,18 @@ export interface AuthRequest extends Request {
   };
 }
 
-export const authenticate = (req: AuthRequest, res: Response, next: NextFunction) => {
-  const authHeader = req.headers.authorization;
+export const authenticate = (req: AuthRequest, res: Response, next: NextFunction): void => {
+  const authHeader = (req.headers as any)?.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'No token' });
+    res.status(401).json({ error: 'No token' });
+    return;
   }
 
   const token = authHeader.substring(7);
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'demo-secret') as any;
-    req.user = {
+    (req as AuthRequest).user = {
       id: decoded.sub,
       email: decoded.email,
       role: decoded.role,
@@ -34,13 +42,15 @@ export const authenticate = (req: AuthRequest, res: Response, next: NextFunction
 };
 
 export const authorize = (...roles: string[]) => {
-  return (req: AuthRequest, res: Response, next: NextFunction) => {
-    if (!req.user) {
-      return res.status(401).json({ error: 'Not authenticated' });
+  return (req: AuthRequest, res: Response, next: NextFunction): void => {
+    if (!(req as AuthRequest).user) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
     }
 
-    if (!roles.includes(req.user.role)) {
-      return res.status(403).json({ error: 'Insufficient permissions' });
+    if (!roles.includes((req as AuthRequest).user!.role)) {
+      res.status(403).json({ error: 'Insufficient permissions' });
+      return;
     }
 
     next();
